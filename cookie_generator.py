@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Motor de generación de cookies de Amazon - Edición Sigilo
-Optimizado para evadir detección de bots y bloqueos en contenedores
+Optimizado para evadir detección de bots y bloqueos en contenedores Docker
 """
 
 import os
@@ -98,6 +98,10 @@ class CookieGenerator:
         options.add_argument("--profile-directory=Default")
         options.add_argument("--disable-blink-features=AutomationControlled")
         
+        # Modo Fantasma Nativo (Compatible con Docker)
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-setuid-sandbox")
+
         # Configuraciones CLAVE para que no se congele en Docker
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
@@ -120,12 +124,11 @@ class CookieGenerator:
         chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome-stable')
         v_main = self._get_chrome_main_version(chrome_bin)
 
-        # Iniciamos el navegador en modo fantasma
+        # Iniciamos el navegador (sin el headless=True para evitar el Stacktrace)
         driver = uc.Chrome(
             options=options, 
             browser_executable_path=chrome_bin, 
-            version_main=v_main,
-            headless=True
+            version_main=v_main
         )
 
         # Inyectamos el camuflaje Stealth
@@ -222,7 +225,10 @@ class CookieGenerator:
             ), None
             
         except TimeoutException:
-            logger.error("⏱️ Error: Tiempo de espera agotado. La página se congeló.")
+            if driver:
+                logger.error(f"🔍 URL al morir: {driver.current_url}")
+                logger.error(f"📄 Título de la página: {driver.title}")
+            logger.error("⏱️ Error: Tiempo de espera agotado. La página se congeló o pidió CAPTCHA.")
             return False, None, "Tiempo de espera agotado (Timeout)"
         except Exception as e:
             error_msg = str(e).split('\n')[0][:100]
