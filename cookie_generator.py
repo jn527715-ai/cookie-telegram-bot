@@ -8,6 +8,7 @@ import os
 import time
 import random
 import logging
+import subprocess
 from datetime import datetime
 from typing import Tuple
 from dataclasses import dataclass
@@ -64,9 +65,19 @@ class CookieGenerator:
                 os.environ['CHROME_BIN'] = browser
                 logger.info(f"✅ Navegador encontrado en {browser}")
                 return
-        # Si no encuentra ninguno, asume google-chrome-stable (instalado por Railway)
         os.environ['CHROME_BIN'] = '/usr/bin/google-chrome-stable'
         logger.warning("Navegador no detectado, usando ruta predeterminada /usr/bin/google-chrome-stable")
+
+    def _get_chrome_main_version(self, binary_path):
+        """Intenta extraer la versión principal de Chrome instalada (ej. 125)"""
+        try:
+            version_str = subprocess.check_output([binary_path, '--version']).decode('utf-8').strip()
+            main_version = int(version_str.split(' ')[-1].split('.')[0])
+            logger.info(f"Versión de Chrome detectada: {main_version}")
+            return main_version
+        except Exception as e:
+            logger.warning(f"No se pudo obtener la versión exacta de Chrome: {e}")
+            return None
 
     def _build_driver(self) -> uc.Chrome:
         Path(self.user_data_dir).mkdir(parents=True, exist_ok=True)
@@ -101,11 +112,11 @@ class CookieGenerator:
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
 
-        # Ruta del binario CORRECTA
         chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome-stable')
-        driver = uc.Chrome(options=options, browser_executable_path=chrome_bin, version_main=None)
+        
+        v_main = self._get_chrome_main_version(chrome_bin)
+        driver = uc.Chrome(options=options, browser_executable_path=chrome_bin, version_main=v_main)
 
-        # Stealth (una sola vez)
         stealth(
             driver,
             languages=["en-US", "en"],
@@ -148,11 +159,12 @@ class CookieGenerator:
             driver = self._build_driver()
             driver.get(self.AMAZON_HOME)
             time.sleep(random.uniform(2, 3))
-            # Cerrar popup cookies
+            
             try:
                 driver.find_element(By.ID, "sp-cc-accept").click()
             except:
                 pass
+                
             driver.get(self.AMAZON_REGISTER_URL)
             time.sleep(random.uniform(2, 4))
 
@@ -160,6 +172,7 @@ class CookieGenerator:
                 EC.presence_of_element_located((By.ID, "ap_customer_name"))
             ).send_keys(name)
             time.sleep(0.5)
+            
             driver.find_element(By.ID, "ap_email").send_keys(email)
             time.sleep(0.5)
             driver.find_element(By.ID, "ap_password").send_keys(password)
@@ -172,8 +185,10 @@ class CookieGenerator:
             current_url = driver.current_url.lower()
             if "register" in current_url or "ap/register" in current_url:
                 return False, None, "Registro fallido o CAPTCHA"
+                
             cookies = driver.get_cookies()
             cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
+            
             return True, GeneratedCookie(
                 cookie_string=cookie_str,
                 email=email,
@@ -182,6 +197,7 @@ class CookieGenerator:
                 timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 time_elapsed=round(time.time() - start, 2)
             ), None
+            
         except Exception as e:
             logger.error(f"Error: {e}")
             return False, None, str(e)[:100]
