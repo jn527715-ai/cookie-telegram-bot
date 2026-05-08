@@ -13,9 +13,8 @@ RUN apt-get update && apt-get install -y \
     unzip \
     xvfb \
     libxss1 \
-    libayatana-appindicator1 \
     fonts-liberation \
-    libasound2 \
+    libasound2t64 \
     libnspr4 \
     libnss3 \
     libx11-xcb1 \
