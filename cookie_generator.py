@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Motor de generación de cookies de Amazon - Edición Sigilo
-Optimizado para evadir detección de bots
+Optimizado para evadir detección de bots y bloqueos en contenedores
 """
 
 import os
@@ -24,7 +24,8 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium_stealth import stealth
 from fake_useragent import UserAgent
 
-logging.basicConfig(level=logging.INFO)
+# Configuración de Logs para ver exactamente qué hace el bot
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("CookieGen")
 
 REALISTIC_USER_AGENTS = [
@@ -53,7 +54,7 @@ class CookieGenerator:
         self._setup_env()
 
     def _setup_env(self):
-        """Busca Chrome/Chromium instalado o usa la ruta por defecto de google-chrome-stable"""
+        """Busca Chrome instalado o usa la ruta de Railway/Docker"""
         posibles = [
             '/usr/bin/google-chrome-stable',
             '/usr/bin/google-chrome',
@@ -63,26 +64,30 @@ class CookieGenerator:
         for browser in posibles:
             if os.path.exists(browser):
                 os.environ['CHROME_BIN'] = browser
-                logger.info(f"✅ Navegador encontrado en {browser}")
+                logger.info(f"✅ Navegador detectado en {browser}")
                 return
         os.environ['CHROME_BIN'] = '/usr/bin/google-chrome-stable'
-        logger.warning("Navegador no detectado, usando ruta predeterminada /usr/bin/google-chrome-stable")
+        logger.warning("⚠️ Usando ruta predeterminada de Chrome.")
 
     def _get_chrome_main_version(self, binary_path):
-        """Intenta extraer la versión principal de Chrome instalada (ej. 125)"""
+        """Extrae la versión principal de Chrome instalada"""
         try:
             version_str = subprocess.check_output([binary_path, '--version']).decode('utf-8').strip()
             main_version = int(version_str.split(' ')[-1].split('.')[0])
-            logger.info(f"Versión de Chrome detectada: {main_version}")
+            logger.info(f"✅ Versión de Chrome detectada: {main_version}")
             return main_version
         except Exception as e:
-            logger.warning(f"No se pudo obtener la versión exacta de Chrome: {e}")
+            logger.warning(f"⚠️ No se pudo obtener la versión exacta: {e}")
             return None
 
     def _build_driver(self) -> uc.Chrome:
         Path(self.user_data_dir).mkdir(parents=True, exist_ok=True)
 
         options = uc.ChromeOptions()
+        
+        # Estrategia de carga rápida: no espera imágenes pesadas ni publicidad
+        options.page_load_strategy = 'eager'
+        
         ua = random.choice(REALISTIC_USER_AGENTS)
         width = random.choice([1366, 1440, 1536, 1920])
         height = random.choice([768, 900, 864, 1080])
@@ -92,10 +97,12 @@ class CookieGenerator:
         options.add_argument(f"--user-data-dir={self.user_data_dir}")
         options.add_argument("--profile-directory=Default")
         options.add_argument("--disable-blink-features=AutomationControlled")
+        
+        # Configuraciones CLAVE para que no se congele en Docker
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--single-process")
+        options.add_argument("--no-zygote")  # <- El salvador antibloqueos
         options.add_argument("--memory-pressure-off")
         options.add_argument("--log-level=3")
 
@@ -113,6 +120,7 @@ class CookieGenerator:
         chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome-stable')
         v_main = self._get_chrome_main_version(chrome_bin)
 
+        # Iniciamos el navegador en modo fantasma
         driver = uc.Chrome(
             options=options, 
             browser_executable_path=chrome_bin, 
@@ -120,6 +128,7 @@ class CookieGenerator:
             headless=True
         )
 
+        # Inyectamos el camuflaje Stealth
         stealth(
             driver,
             languages=["en-US", "en"],
@@ -139,11 +148,13 @@ class CookieGenerator:
         return driver
 
     def _human_type(self, element, text: str):
+        """Simula escritura humana"""
         for char in text:
             element.send_keys(char)
             time.sleep(random.uniform(0.05, 0.2))
 
     def _random_mouse_movements(self, driver):
+        """Simula scroll humano"""
         try:
             driver.execute_script(f"window.scrollTo(0, {random.randint(50, 300)});")
             time.sleep(0.5)
@@ -154,12 +165,15 @@ class CookieGenerator:
         driver = None
         start = time.time()
         if not name:
-            first_names = ["Michael", "Emma", "David", "Sophia"]
-            last_names = ["Smith", "Johnson", "Williams", "Brown"]
+            first_names = ["Michael", "Emma", "David", "Sophia", "Daniel", "Olivia"]
+            last_names = ["Smith", "Johnson", "Williams", "Brown", "Garcia", "Miller"]
             name = f"{random.choice(first_names)} {random.choice(last_names)}"
 
         try:
+            logger.info("⚙️ Paso 1: Iniciando Chrome en modo fantasma...")
             driver = self._build_driver()
+            
+            logger.info("🌐 Paso 2: Abriendo Amazon.com (Carga Ultra Rápida)...")
             driver.get(self.AMAZON_HOME)
             time.sleep(random.uniform(2, 3))
             
@@ -168,9 +182,11 @@ class CookieGenerator:
             except:
                 pass
                 
+            logger.info("📝 Paso 3: Redirigiendo a la página de registro...")
             driver.get(self.AMAZON_REGISTER_URL)
             time.sleep(random.uniform(2, 4))
 
+            logger.info(f"⌨️ Paso 4: Llenando formulario para {email}...")
             WebDriverWait(driver, self.TIMEOUT).until(
                 EC.presence_of_element_located((By.ID, "ap_customer_name"))
             ).send_keys(name)
@@ -182,13 +198,17 @@ class CookieGenerator:
             time.sleep(0.5)
             driver.find_element(By.ID, "ap_password_check").send_keys(password)
             time.sleep(0.5)
+            
+            logger.info("🚀 Paso 5: Enviando formulario de registro...")
             driver.find_element(By.ID, "continue").click()
             time.sleep(random.uniform(6, 10))
 
             current_url = driver.current_url.lower()
             if "register" in current_url or "ap/register" in current_url:
-                return False, None, "Registro fallido o CAPTCHA"
+                logger.warning("❌ Paso 6: Error. Amazon detectó el bot o pidió CAPTCHA.")
+                return False, None, "Registro fallido o CAPTCHA detectado"
                 
+            logger.info("✅ Paso 6: ¡Registro exitoso! Extrayendo cookies...")
             cookies = driver.get_cookies()
             cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
             
@@ -201,10 +221,15 @@ class CookieGenerator:
                 time_elapsed=round(time.time() - start, 2)
             ), None
             
+        except TimeoutException:
+            logger.error("⏱️ Error: Tiempo de espera agotado. La página se congeló.")
+            return False, None, "Tiempo de espera agotado (Timeout)"
         except Exception as e:
-            logger.error(f"Error: {e}")
-            return False, None, str(e)[:100]
+            error_msg = str(e).split('\n')[0][:100]
+            logger.error(f"💥 Error inesperado: {error_msg}")
+            return False, None, error_msg
         finally:
+            logger.info("🧹 Paso Final: Limpiando y cerrando el navegador...")
             if driver:
                 try:
                     driver.quit()
