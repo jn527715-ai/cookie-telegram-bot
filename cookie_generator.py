@@ -136,7 +136,17 @@ class CookieGenerator:
         options.add_experimental_option('useAutomationExtension', False)
 
         # Crear driver
-        driver = uc.Chrome(options=options, version_main=None)
+                # ... (todo el código anterior) ...
+        options.add_experimental_option('useAutomationExtension', False)
+
+        # --- CORRECCIÓN: Pasar la ruta del binario explícitamente ---
+        chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/chromium')
+        driver = uc.Chrome(options=options, browser_executable_path=chrome_bin, version_main=None)
+
+        stealth(
+            driver,
+            languages=["en-US", "en"],
+            # ... resto del stealth ...
 
         # Aplicar stealth mejorado
         stealth(
