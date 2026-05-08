@@ -86,6 +86,7 @@ class CookieGenerator:
         ua = random.choice(REALISTIC_USER_AGENTS)
         width = random.choice([1366, 1440, 1536, 1920])
         height = random.choice([768, 900, 864, 1080])
+        
         options.add_argument(f"--window-size={width},{height}")
         options.add_argument(f"--user-agent={ua}")
         options.add_argument(f"--user-data-dir={self.user_data_dir}")
@@ -94,7 +95,6 @@ class CookieGenerator:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--headless=new")
         options.add_argument("--single-process")
         options.add_argument("--memory-pressure-off")
         options.add_argument("--log-level=3")
@@ -109,13 +109,16 @@ class CookieGenerator:
             "profile.default_content_setting_values.notifications": 2,
         }
         options.add_experimental_option("prefs", prefs)
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
 
         chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome-stable')
-        
         v_main = self._get_chrome_main_version(chrome_bin)
-        driver = uc.Chrome(options=options, browser_executable_path=chrome_bin, version_main=v_main)
+
+        driver = uc.Chrome(
+            options=options, 
+            browser_executable_path=chrome_bin, 
+            version_main=v_main,
+            headless=True
+        )
 
         stealth(
             driver,
